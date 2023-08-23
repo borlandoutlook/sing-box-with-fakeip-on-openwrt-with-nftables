@@ -3,18 +3,19 @@
 需要在OpenWrt上设置一个vpn(tun0)接口，然后通过nft实现分流，即访问中国区的IP地址时直接通过wan口，访问其他IP地址时通过tun0口。
 具体的操作步骤如下：
 
-用官方的VERSION="22.03.5"的OpenWrt版本，装上kmod-tun,
-/sing-box目录是工作目录,
-eth1是Wan口
+1. 用官方的VERSION="22.03.5"的OpenWrt版本，装上kmod-tun
 
-去sing-box github release里下载二进制程序，放到/sing-box
+- (/sing-box目录是工作目录,eth1是Wan口)
 
-在OpenWrt的web界面中，进入网络-接口，添加一个新的接口，命名为vpn，选择协议为无（Unmanaged），覆盖物理设置为tun0，并应用设置。
+2. 去sing-box github release里下载二进制程序，放到/sing-box
 
-在OpenWrt的web界面中，进入网络-防火墙，编辑vpn接口所属的区域（默认为未分配），将其加入到lan区域，并应用设置。
+3. 在OpenWrt的web界面中，进入网络-接口，添加一个新的接口，命名为vpn，选择协议为无（Unmanaged），覆盖物理设置为tun0，并应用设置。
 
-设置为init.d管理：
-```root@OpenWrt:~# cat /etc/init.d/sing-box
+4. 在OpenWrt的web界面中，进入网络-防火墙，编辑vpn接口所属的区域（默认为未分配），将其加入到lan区域，并应用设置。
+
+5. 设置为init.d管理：
+```
+root@OpenWrt:~# cat /etc/init.d/sing-box
 #!/bin/sh /etc/rc.common
 #
 # Copyright (C) 2022 by nekohasekai <contact-sagernet@sekai.icu>
@@ -69,12 +70,13 @@ reload_service() {
 }
 ```
 
-再执行`/etc/init.d/sing-box enable`,设置为开机自动启动。
+- 再执行`/etc/init.d/sing-box enable`,设置为开机自动启动。
 
-以下是nft分流设置的具体过程。
+# 以下是nft分流设置的具体过程。
 
-得到chn_ip.txt(将fakeip的地址段插入）：
-```#!/bin/bash
+6. 得到chn_ip.txt(将fakeip的地址段插入）：
+```
+#!/bin/bash
 
 wget https://ftp.apnic.net/stats/apnic/delegated-apnic-latest; grep CN delegated-apnic-latest > delegated-cn-latest
 awk -F'|' '/CN\|ipv4/ { printf("%s/%d\n", $4, 32-log($5)/log(2)) }' delegated-cn-latest > chn_ip.txt
@@ -87,31 +89,37 @@ rm delegated-apnic-latest delegated-cn-latest chn_ip.txt chn_ip_sorted.txt chn_i
 mv chn_ip_final.txt chn_ip.txt
 ```
 
-制作nft include的国内ip地址set，先每行加大括号
-```sed 's/^/{/;s/$/}/' ~/chn_ip.txt > ~/chn_ip.nft
+7. 制作nft include的国内ip地址set，先每行加大括号
 ```
-然后制作成为如下格式（随便怎么弄，在windows里也可以）：
-```elements = {1.0.1.0/24,1.0.2.0/23,1.0.8.0/21,1.0.32.0/19, ... ,223.255.252.0/23}
+sed 's/^/{/;s/$/}/' ~/chn_ip.txt > ~/chn_ip.nft
 ```
 
+- 然后制作成为如下格式（随便怎么弄，在windows里也可以）：
+```
+elements = {1.0.1.0/24,1.0.2.0/23,1.0.8.0/21,1.0.32.0/19, ... ,223.255.252.0/23}
+```
 
-查看nftables中已有的表和链：
-```nft list tables
+8. 查看nftables中已有的表和链：
+```
+nft list tables
 nft list chains
 ```
 
-现在路由器的状态还是正常的未分流未启动tun0状态，是普通的路由器nft配置，保存这个配置以供复原用：
-```nft list ruleset > /sing-box/nft_novpn.conf
+- 现在路由器的状态还是正常的未分流未启动tun0状态，是普通的路由器nft配置，保存这个配置以供复原用：
+```
+nft list ruleset > /sing-box/nft_novpn.conf
 ```
 
-创建一个新的表和链，先在shell里用以下的命令：
-（在shell中，直接用分号会出问题，所以加上转义\）
-```nft add table ip filter
+9. 创建一个新的表和链，先在shell里用以下的命令：
+- （在shell中，直接用分号会出问题，所以加上转义\）
+```
+nft add table ip filter
 nft add chain ip filter china { type filter hook input priority 0\; policy accept\; }
 ```
 
-然后在shell里执行 nftables 脚本
-```#!/usr/sbin/nft -f
+- 然后在shell里执行 nftables 脚本
+```
+#!/usr/sbin/nft -f
 
 # Create a table named filter in the ip family
 table ip filter {
@@ -150,25 +158,28 @@ table ip route {
 }
 ```
 
-这个脚本的基本思路是：
-在 filter 表中创建一个 china 集合，包含了所有分配给中国区的 IP 地址。
-在 filter 表中创建两个链，分别在 prerouting 和 postrouting 阶段，将目标地址或源地址在 china 集合中的数据包标记为 1。
-在 route 表中创建一个链，在 output 阶段，根据数据包的标记，将其路由到原来的 wan 接口或 vpn 接口。
-将这个脚本保存为一个文件，比如 vpn_route.nft，然后在shell里执行它，
-```nft -f vpn_route.nft
+- 这个脚本的基本思路是：
+-- 在 filter 表中创建一个 china 集合，包含了所有分配给中国区的 IP 地址。
+-- 在 filter 表中创建两个链，分别在 prerouting 和 postrouting 阶段，将目标地址或源地址在 china 集合中的数据包标记为 1。
+-- 在 route 表中创建一个链，在 output 阶段，根据数据包的标记，将其路由到原来的 wan 接口或 vpn 接口。
+- 将这个脚本保存为一个文件，比如 vpn_route.nft，然后在shell里执行它，
+```
+nft -f vpn_route.nft
 ```
 
-命令行直接手动启动sing-box，启用了fakeip，要等个几十秒起效，测试是否顺利。
-```/sing-box/sing-box run -c /sing-box/config.json
+10. 命令行直接手动启动sing-box，启用了fakeip，要等个几十秒起效，测试是否顺利。
+```
+/sing-box/sing-box run -c /sing-box/config.json
 ```
 
-顺利的话，将当下的nftables规则保存到一个文件中，供以后sing-box服务启动tun0（vpn）接口上联后自动加载：
-```nft list ruleset > /sing-box/nft_withvpn.conf
+11. 顺利的话，将当下的nftables规则保存到一个文件中，供以后sing-box服务启动tun0（vpn）接口上联后自动加载：
+```
+nft list ruleset > /sing-box/nft_withvpn.conf
 ```
 
-
-设置vpn上联、下线的触发脚本
-```root@OpenWrt:~# cat /etc/hotplug.d/iface/99-vpnnft
+12. 设置vpn上联、下线的触发脚本
+```
+root@OpenWrt:~# cat /etc/hotplug.d/iface/99-vpnnft
 if [ "$INTERFACE" = "vpn" ]; then
       if [ "$ACTION" = "ifup" ]; then
           # vpn interface is up
@@ -183,7 +194,11 @@ fi
 ```
 
 
-最后，设置sing-box服务自动启动
-`/etc/init.d/sing-box enable`
+13. 最后，设置sing-box服务自动启动
+```
+/etc/init.d/sing-box enable
+```
 
-这样就完成了分流的设置，目标地址不在china集合中的数据包走VPN链，并被转发到VPN网关，而其他数据包（国内ip）则走默认路由表。并完成了sing-box服务的自动启动配置。
+- 这样就完成了分流的设置，目标地址不在china集合中的数据包走VPN链，并被转发到VPN网关，而其他数据包（国内ip）则走默认路由表。并完成了sing-box服务的自动启动配置。
+
+- 都是临时抱佛脚搞通的，囫囵吞枣，不求甚解。非常希望有熟手来帮我指正。请随意发issue。
