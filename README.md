@@ -192,7 +192,7 @@ root@OpenWrt:~# cat /etc/init.d/delay_sing-box
 START=99
 
 start() {
-    sleep 6s
+    sleep 9s
     /etc/init.d/sing-box start
 }
 ```
