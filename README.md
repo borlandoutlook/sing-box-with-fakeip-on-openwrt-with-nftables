@@ -5,15 +5,130 @@
 
 1. 用官方的VERSION="22.03.5"的OpenWrt版本，装上kmod-tun
 
-- (/sing-box目录是工作目录,eth1是Wan口)
+    - (/sing-box目录是工作目录,eth1是Wan口)
 
-2. 去sing-box github release里下载二进制程序，放到/sing-box
+2. 去sing-box github release里下载二进制程序，放到/sing-box，我的sing-box config.json如下
+```
+{
+  "log": {
+  "disabled": true
+  },
+  "dns": {
+    "servers": [
+      {
+        "tag": "google",
+        "address": "tls://8.8.8.8"
+      },
+      {
+        "tag": "local",
+        "address": "223.5.5.5",
+        "detour": "direct"
+      },
+      {
+        "tag": "remote",
+        "address": "fakeip"
+      },
+      {
+        "tag": "block",
+        "address": "rcode://success"
+      }
+    ],
+    "rules": [
+      {
+        "geosite": "category-ads-all",
+        "server": "block",
+        "disable_cache": true
+      },
+      {
+        "outbound": "any",
+        "server": "local"
+      },
+      {
+        "geosite": "cn",
+        "server": "local"
+      },
+      {
+        "query_type": [
+          "A",
+          "AAAA"
+        ],
+        "server": "remote"
+      }
+    ],
+    "fakeip": {
+      "enabled": true,
+      "inet4_range": "198.18.0.0/15"
+    },
+    "independent_cache": true,
+    "strategy": "ipv4_only"
+  },
+  "inbounds": [
+    {
+      "type": "tun",
+      "inet4_address": "172.19.0.1/30",
+      "auto_route": true,
+      "sniff": true,
+      "strict_route": true,
+      "stack": "system"
+    }
+  ],
+  "outbounds": [
+    {
+      "type": "hysteria",
+      "tag": "hysteria-out",
+      "server": "xx.xx.xx.xx",
+      "server_port": xxxx,
+      "up_mbps": 300,
+      "down_mbps": 600,
+      "auth_str": "********",
+      "tls": {
+        "enabled": true,
+        "server_name": "/CN=bing.com",
+        "insecure": true,
+        "alpn": [
+          "h3"
+        ]
+      }
+    },
+    {
+      "type": "direct",
+      "tag": "direct"
+    },
+    {
+      "type": "block",
+      "tag": "block"
+    },
+    {
+      "type": "dns",
+      "tag": "dns-out"
+    }
+  ],
+  "route": {
+    "rules": [
+      {
+        "protocol": "dns",
+        "outbound": "dns-out"
+      },
+      {
+        "geosite": "category-ads-all",
+        "outbound": "block"
+      },
+      {
+        "geosite": "cn",
+        "geoip": "cn",
+        "outbound": "direct"
+      }
+    ],
+    "auto_detect_interface": true
+  }
+}
+```
 
-3. 在OpenWrt的web界面中，进入网络-接口，添加一个新的接口，命名为vpn，选择协议为无（Unmanaged），覆盖物理设置为tun0，并应用设置。
+4. 在OpenWrt的web界面中，进入网络-接口，添加一个新的接口，命名为vpn，选择协议为无（Unmanaged），覆盖物理设置为tun0，并应用设置。
 
-4. 在OpenWrt的web界面中，进入网络-防火墙，编辑vpn接口所属的区域（默认为未分配），将其加入到lan区域，并应用设置。
+5. 在OpenWrt的web界面中，进入网络-防火墙，编辑vpn接口所属的区域（默认为未分配），将其加入到lan区域，并应用设置。
 
-5. 设置为init.d管理：
+6. 设置为init.d管理：
 ```
 root@OpenWrt:~# cat /etc/init.d/sing-box
 #!/bin/sh /etc/rc.common
@@ -54,7 +169,6 @@ start_service() {
   procd_set_param stderr 1
   procd_set_param respawn "${respawn_threshold:-3600}" "${respawn_timeout:-5}" "${respawn_retry:-5}"
   procd_close_instance
-  sleep 5s
   echo "sing-box is started!"
 }
 
@@ -65,12 +179,24 @@ stop_service() {
 
 reload_service() {
   stop
+  sleep 1s
   echo "sing-box is restarted!"
   start
 }
 ```
+- 有个问题，OpenWrt启动后这样直接启动会出问题，猜应该是wan口获得dhcp需要3、4秒，所以即使是开机自启99序的，sing-box的启动也已经完成，所以"auto_detect_interface":会推断不wan口是哪个，完全上不去网。所以，再做个专门延迟启动sing-box的服务
+```
+root@OpenWrt:~# cat /etc/init.d/delay_sing-box
+#!/bin/sh /etc/rc.common
 
-- 再执行`/etc/init.d/sing-box enable`,设置为开机自动启动。
+START=99
+
+start() {
+    sleep 6s
+    /etc/init.d/sing-box start
+}
+```
+- 再执行`/etc/init.d/delay_sing-box enable`,设置为开机自动启动。
 
 # 以下是nft分流设置的具体过程。
 
@@ -159,9 +285,9 @@ table ip route {
 ```
 
 - 这个脚本的基本思路是：
--- 在 filter 表中创建一个 china 集合，包含了所有分配给中国区的 IP 地址。
--- 在 filter 表中创建两个链，分别在 prerouting 和 postrouting 阶段，将目标地址或源地址在 china 集合中的数据包标记为 1。
--- 在 route 表中创建一个链，在 output 阶段，根据数据包的标记，将其路由到原来的 wan 接口或 vpn 接口。
+  - 在 filter 表中创建一个 china 集合，包含了所有分配给中国区的 IP 地址。
+  - 在 filter 表中创建两个链，分别在 prerouting 和 postrouting 阶段，将目标地址或源地址在 china 集合中的数据包标记为 1。
+  - 在 route 表中创建一个链，在 output 阶段，根据数据包的标记，将其路由到原来的 wan 接口或 vpn 接口。
 - 将这个脚本保存为一个文件，比如 vpn_route.nft，然后在shell里执行它，
 ```
 nft -f vpn_route.nft
