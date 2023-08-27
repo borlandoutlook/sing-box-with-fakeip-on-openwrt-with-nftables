@@ -1,4 +1,4 @@
-# sing-box-with-fakeip-on-openwrt-with-nftables
+# 科学上网透明网关sing-box-with-fakeip-on-openwrt-with-nftables
 需要在OpenWrt上设置一个vpn(tun0)接口，然后通过nft实现分流，即访问中国区的IP地址时直接通过wan口，访问其他IP地址时通过tun0口。
 具体的操作步骤如下：
 1. 用官方的VERSION="22.03.5"的OpenWrt版本，装上kmod-tun
