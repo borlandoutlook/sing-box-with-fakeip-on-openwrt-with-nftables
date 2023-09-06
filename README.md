@@ -295,8 +295,8 @@ nft -f vpn_route.nft
 ```
 nft list ruleset > /sing-box/nft_withvpn.conf
 ```
-12. 设置vpn上联、下线的触发脚本
-```
+12. 设置vpn上联、下线的触发脚本，有时wan口会重连，这时要看看是否在透明代理状态，如果是，要重启一下sing-box
+```shell
 root@OpenWrt:~# cat /etc/hotplug.d/iface/99-vpnnft
 #!/bin/bash
 
