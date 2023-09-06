@@ -291,6 +291,14 @@ nft list ruleset > /sing-box/nft_withvpn.conf
 12. 设置vpn上联、下线的触发脚本
 ```
 root@OpenWrt:~# cat /etc/hotplug.d/iface/99-vpnnft
+#!/bin/bash
+
+if [ $ACTION = ifup -a $INTERFACE = wan ]; then
+    if ip link show tun0 > /dev/null 2>&1; then
+            sh /etc/init.d/sing-box restart
+    fi
+fi
+
 if [ "$INTERFACE" = "vpn" ]; then
       if [ "$ACTION" = "ifup" ]; then
           # vpn interface is up
