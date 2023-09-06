@@ -4,10 +4,10 @@
 1. 用官方的VERSION="22.03.5"的OpenWrt版本，装上kmod-tun
     - (/sing-box目录是工作目录,eth1是Wan口)
 2. 去sing-box github release里下载二进制程序，放到/sing-box，我的sing-box config.json如下
-```
+```json
 {
   "log": {
-  "disabled": true
+    "disabled": false//true
   },
   "dns": {
     "servers": [
@@ -44,6 +44,10 @@
         "server": "local"
       },
       {
+        "domain": "newsmth.net",
+        "server": "local"
+      },
+      {
         "query_type": [
           "A",
           "AAAA"
@@ -55,35 +59,33 @@
       "enabled": true,
       "inet4_range": "198.18.0.0/15"
     },
-    "independent_cache": true,
-    "strategy": "ipv4_only"
+    "strategy": "ipv4_only",
+    "independent_cache": true
   },
   "inbounds": [
     {
       "type": "tun",
       "inet4_address": "172.19.0.1/30",
       "auto_route": true,
-      "sniff": true,
       "strict_route": true,
-      "stack": "system"
+      "stack": "system",
+      "sniff": true
     }
   ],
   "outbounds": [
     {
       "type": "hysteria",
       "tag": "hysteria-out",
-      "server": "xx.xx.xx.xx",
+      "server": "xxx.xxx.xxx.xxx",
       "server_port": xxxx,
       "up_mbps": 300,
       "down_mbps": 600,
-      "auth_str": "********",
+      "auth_str": "xxxxxxxx",
       "tls": {
         "enabled": true,
         "server_name": "/CN=bing.com",
         "insecure": true,
-        "alpn": [
-          "h3"
-        ]
+        "alpn": "h3"
       }
     },
     {
@@ -115,7 +117,12 @@
         "outbound": "direct"
       }
     ],
-    "auto_detect_interface": true
+    "default_interface": "eth1"
+  },
+  "experimental": {
+    "clash_api": {
+      "store_fakeip": true
+    }
   }
 }
 ```
