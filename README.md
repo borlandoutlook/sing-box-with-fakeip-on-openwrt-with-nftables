@@ -7,7 +7,7 @@
 ```json
 {
   "log": {
-    "disabled": false//true
+    "disabled": false
   },
   "dns": {
     "servers": [
@@ -41,10 +41,6 @@
       },
       {
         "geosite": "cn",
-        "server": "local"
-      },
-      {
-        "domain": "newsmth.net",
         "server": "local"
       },
       {
@@ -198,7 +194,7 @@ start() {
 ```
 - 再执行`/etc/init.d/delay_sing-box enable`,设置为开机自动启动。
 # 以下是nft分流设置的具体过程。
-6. 得到chn_ip.txt(将fakeip的地址段插入）：
+6. 得到chn_ip.txt(记得将fakeip的地址段插入）：
 ```
 #!/bin/bash
 
