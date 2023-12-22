@@ -3,7 +3,7 @@
 具体的操作步骤如下：
 1. 用官方的VERSION="22.03.5"的OpenWrt版本，装上kmod-tun
     - (/sing-box目录是工作目录,eth1是Wan口)
-2. 去sing-box github release里下载二进制程序，放到/sing-box，我的sing-box config.json如下
+2. 去sing-box github release里下载二进制程序，放到/sing-box，我的sing-box config.json如下(这是client端的，server端的大家可以按照hysteria那一段对应拼出来，这里就不赘述了)
 ```json
 {
   "log": {
